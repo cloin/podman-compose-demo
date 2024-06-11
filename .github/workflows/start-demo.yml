@@ -47,7 +47,7 @@ jobs:
 
     - name: Install podman-compose and dependencies
       run: |
-        pip3 install podman-compose pyyaml requests
+        pip3 install podman-compose==1.0.6 pyyaml==5.4.1 requests==2.25.1
 
     - name: Start SSH service
       run: |
