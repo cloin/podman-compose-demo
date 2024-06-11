@@ -2,12 +2,15 @@
 name: Start Demo
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       podman-compose-path:
         description: 'Path to the podman-compose.yml file'
         required: true
         default: 'podman-compose.yml'
+    secrets:
+      NGROK_AUTH_TOKEN:
+        required: true
 
 permissions:
   contents: write
