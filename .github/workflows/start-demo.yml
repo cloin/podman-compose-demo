@@ -104,8 +104,8 @@ jobs:
 
     - name: Update issue body file
       run: |
-        SSH_HOST=$(echo ${{ steps.get-ngrok-urls.outputs.ssh_url }} | sed 's/tcp:\/\///' | cut -d: -f1)
-        SSH_PORT=$(echo ${{ steps.get-ngrok-urls.outputs.ssh_url }} | sed 's/tcp:\/\///' | cut -d: -f2)
+        SSH_HOST=$(echo ${{ steps.get-ngrok-urls.outputs.ssh_url }} | sed -E 's#^tcp://(.*):(.*)$#\1#')
+        SSH_PORT=$(echo ${{ steps.get-ngrok-urls.outputs.ssh_url }} | sed -E 's#^tcp://(.*):(.*)$#\2#')
         echo "Your services are available at the following URLs:" > issue_body.md
         echo "Web service: ${{ steps.get-ngrok-urls.outputs.web_url }}" >> issue_body.md
         echo "" >> issue_body.md
