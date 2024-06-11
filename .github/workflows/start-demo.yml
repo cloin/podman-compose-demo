@@ -64,6 +64,10 @@ jobs:
       run: |
         podman-compose -f "${{ inputs.podman-compose-path }}" ps
 
+    - name: Download generate_ngrok_config.py script
+      run: |
+        curl -O https://raw.githubusercontent.com/cloin/podman-compose-demo/main/.github/workflows/generate_ngrok_config.py
+
     - name: Create ngrok configuration file
       env:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
