@@ -25,5 +25,11 @@ for service_name, service_data in podman_compose.get('services', {}).items():
                     'inspect': False
                 }
 
+ngrok_config['tunnels']['ssh'] = {
+    'addr': '22',
+    'proto': 'tcp',
+    'inspect': False
+}
+
 with open('ngrok.yml', 'w') as file:
     yaml.dump(ngrok_config, file)

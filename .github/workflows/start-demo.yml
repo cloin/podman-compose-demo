@@ -92,7 +92,7 @@ jobs:
       run: |
         sleep 5  # Wait for ngrok to start
         NGROK_WEB_URL=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name | contains("web")) | .public_url')
-        NGROK_SSH_URL=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name | contains("ssh")) | .public_url')
+        NGROK_SSH_URL=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="ssh") | .public_url')
         echo "::set-output name=web_url::$NGROK_WEB_URL"
         echo "::set-output name=ssh_url::$NGROK_SSH_URL"
 
