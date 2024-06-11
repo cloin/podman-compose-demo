@@ -8,6 +8,7 @@ on:
         description: 'Path to the podman-compose.yml file'
         required: true
         default: 'podman-compose.yml'
+        type: string
     secrets:
       NGROK_AUTH_TOKEN:
         required: true
