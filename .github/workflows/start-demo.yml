@@ -67,34 +67,37 @@ jobs:
     - name: Create ngrok configuration file
       env:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+        PODMAN_COMPOSE_PATH: ${{ inputs.podman-compose-path }}
       run: |
-        import yaml
-        import os
+        python -c "
+import yaml
+import os
 
-        podman_compose_path = os.getenv('INPUT_PODMAN_COMPOSE_PATH')
-        with open(podman_compose_path, 'r') as file:
-          podman_compose = yaml.safe_load(file)
+podman_compose_path = os.getenv('PODMAN_COMPOSE_PATH')
+with open(podman_compose_path, 'r') as file:
+  podman_compose = yaml.safe_load(file)
 
-        ngrok_config = {
-          'version': '2',
-          'authtoken': os.getenv('NGROK_AUTH_TOKEN'),
-          'tunnels': {}
+ngrok_config = {
+  'version': '2',
+  'authtoken': os.getenv('NGROK_AUTH_TOKEN'),
+  'tunnels': {}
+}
+
+for service_name, service_data in podman_compose.get('services', {}).items():
+  ports = service_data.get('ports', [])
+  for port in ports:
+    if ':' in port:
+      internal_port, external_port = port.split(':')
+      if not internal_port.startswith('127.0.0.1'):
+        ngrok_config['tunnels'][f'{service_name}_{external_port}'] = {
+          'addr': external_port,
+          'proto': 'http',
+          'inspect': False
         }
 
-        for service_name, service_data in podman_compose.get('services', {}).items():
-          ports = service_data.get('ports', [])
-          for port in ports:
-            if ':' in port:
-              internal_port, external_port = port.split(':')
-              if not internal_port.startswith('127.0.0.1'):
-                ngrok_config['tunnels'][f'{service_name}_{external_port}'] = {
-                  'addr': external_port,
-                  'proto': 'http',
-                  'inspect': False
-                }
-
-        with open('ngrok.yml', 'w') as file:
-          yaml.dump(ngrok_config, file)
+with open('ngrok.yml', 'w') as file:
+  yaml.dump(ngrok_config, file)
+        "
 
     - name: Display ngrok configuration
       run: cat ngrok.yml
@@ -106,4 +109,85 @@ jobs:
         sudo apt-get update && sudo apt-get install ngrok
 
     - name: Start ngrok with configuration file
-      run: ng
+      run: ngrok start --config ngrok.yml --all &
+
+    - name: Get ngrok URLs
+      id: get-ngrok-urls
+      run: |
+        sleep 5  # Wait for ngrok to start
+        NGROK_WEB_URLS=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name | contains("web")) | .public_url')
+        echo "::set-output name=web_urls::$NGROK_WEB_URLS"
+
+    - name: Base64 encode SSH private key
+      id: encode-ssh-key
+      run: |
+        base64 -w 0 ~/.ssh/id_rsa > id_rsa_base64
+        echo "::set-output name=ssh_key_base64::$(cat id_rsa_base64)"
+
+    - name: Update issue body file
+      run: |
+        SSH_HOST=$(echo ${{ steps.get-ngrok-urls.outputs.web_urls }} | sed 's/tcp:\/\///' | cut -d: -f1)
+        SSH_PORT=$(echo ${{ steps.get-ngrok-urls.outputs.web_urls }} | sed 's/tcp:\/\///' | cut -d: -f2)
+        echo "Your services are available at the following URLs:" > issue_body.md
+        echo "Web services: ${{ steps.get-ngrok-urls.outputs.web_urls }}" >> issue_body.md
+        echo "" >> issue_body.md
+        echo "SSH into the runner using the following command:" >> issue_body.md
+        echo "\`\`\`" >> issue_body.md
+        echo "echo \"${{ steps.encode-ssh-key.outputs.ssh_key_base64 }}\" | base64 --decode > id_rsa" >> issue_body.md
+        echo "chmod 600 id_rsa" >> issue_body.md
+        echo "ssh -i id_rsa -o StrictHostKeyChecking=no runner@${SSH_HOST} -p ${SSH_PORT}" >> issue_body.md
+        echo "\`\`\`" >> issue_body.md
+
+    - name: Update issue with environment details
+      uses: actions/github-script@v5
+      with:
+        script: |
+          const fs = require('fs');
+          const issueBody = fs.readFileSync('issue_body.md', 'utf8');
+          await github.rest.issues.update({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: '${{ steps.create-issue.outputs.issue-number }}',
+            body: issueBody
+          });
+
+    - name: Monitor issue for closure
+      uses: actions/github-script@v5
+      with:
+        script: |
+          const issueNumber = '${{ steps.create-issue.outputs.issue-number }}';
+          const checkIssueClosed = async () => {
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber
+            });
+            if (issue.state === 'closed') {
+              core.info('Issue is closed. Canceling workflow...');
+              await github.rest.actions.cancelWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: context.runId
+              });
+            } else {
+              core.info('Issue is still open. Continuing...');
+            }
+          };
+          setInterval(checkIssueClosed, 60000); // Check every minute
+
+    - name: Sleep for interaction period
+      run: sleep 3600  # Keep services alive for 1 hour
+
+    - name: Cleanup
+      if: always()
+      run: |
+        podman-compose -f "${{ inputs.podman-compose-path }}" down
+        pkill ngrok
+
+    - name: Close issue with comment
+      if: always()
+      run: |
+        ISSUE_NUMBER=${{ steps.create-issue.outputs.issue-number }}
+        curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -d "{\"body\": \"Closing this issue as the session has ended.\", \"state\": \"closed\"}" \
+          "https://api.github.com/repos/${{ github.repository }}/issues/${ISSUE_NUMBER}"
