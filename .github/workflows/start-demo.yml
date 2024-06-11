@@ -27,6 +27,11 @@ permissions:
 jobs:
   setup-services:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    env:
+      FAILURE: false
+      SUCCESS: false
 
     steps:
     - name: Create new issue
@@ -148,7 +153,8 @@ jobs:
               issue_number: issueNumber
             });
             if (issue.state === 'closed') {
-              core.info('Issue is closed. Canceling workflow...');
+              core.info('Issue is closed. Setting workflow status to success...');
+              core.exportVariable('SUCCESS', true);
               await github.rest.actions.cancelWorkflowRun({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -162,6 +168,13 @@ jobs:
 
     - name: Sleep for interaction period
       run: sleep 3600  # Keep services alive for 1 hour
+      continue-on-error: true
+
+    - name: Set failure status
+      if: failure()
+      run: echo "Setting workflow status to failure..."
+      env:
+        FAILURE: true
 
     - name: Cleanup
       if: always()
@@ -176,3 +189,11 @@ jobs:
         curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
           -d "{\"body\": \"Closing this issue as the session has ended.\", \"state\": \"closed\"}" \
           "https://api.github.com/repos/${{ github.repository }}/issues/${ISSUE_NUMBER}"
+
+    - name: Report success
+      if: env.SUCCESS == 'true'
+      run: echo "Workflow completed successfully."
+
+    - name: Report failure
+      if: env.FAILURE == 'true'
+      run: echo "Workflow failed."
