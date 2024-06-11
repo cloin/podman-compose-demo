@@ -1,6 +1,13 @@
 name: Start Demo
 
 on:
+  workflow_dispatch:
+    inputs:
+      podman-compose-path:
+        description: 'Path to the podman-compose.yml file'
+        required: true
+        default: 'podman-compose.yml'
+        type: string
   workflow_call:
     inputs:
       podman-compose-path:
@@ -38,13 +45,9 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v2
 
-    # - name: Install podman-compose and dependencies
-    #   run: |
-    #     pip3 install podman-compose pyyaml requests
-
     - name: Install podman-compose and dependencies
       run: |
-        pip3 install requests==2.25.1 PyYAML==5.4.1 podman-compose==1.0.6 
+        pip3 install podman-compose pyyaml requests
 
     - name: Start SSH service
       run: |
