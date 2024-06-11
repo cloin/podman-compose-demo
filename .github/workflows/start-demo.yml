@@ -113,7 +113,7 @@ jobs:
         echo "\`\`\`" >> issue_body.md
         echo "echo \"${{ steps.encode-ssh-key.outputs.ssh_key_base64 }}\" | base64 --decode > id_rsa" >> issue_body.md
         echo "chmod 600 id_rsa" >> issue_body.md
-        echo "ssh -i id_rsa -o StrictHostKeyChecking=no runner@${SSH_HOST} -p ${SSH_PORT}" >> issue_body.md
+        echo "ssh -i id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no runner@${SSH_HOST} -p ${SSH_PORT}" >> issue_body.md
         echo "\`\`\`" >> issue_body.md
 
     - name: Update issue with environment details
