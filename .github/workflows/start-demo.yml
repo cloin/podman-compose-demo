@@ -38,9 +38,13 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v2
 
+    # - name: Install podman-compose and dependencies
+    #   run: |
+    #     pip3 install podman-compose pyyaml requests
+
     - name: Install podman-compose and dependencies
       run: |
-        pip3 install podman-compose pyyaml requests
+        pip3 install -r requirements.txt
 
     - name: Start SSH service
       run: |
