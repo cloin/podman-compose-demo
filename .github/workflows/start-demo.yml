@@ -42,7 +42,7 @@ jobs:
           const { data: issue } = await github.rest.issues.create({
             owner: context.repo.owner,
             repo: context.repo.repo,
-            title: 'Demo environment access',
+            title: `Demo environment access - Job ID: ${context.runId}`,
             body: 'The demo environment is being set up. Details will follow shortly.'
           });
           core.setOutput('issue-number', issue.number);
@@ -144,9 +144,13 @@ jobs:
     - name: Monitor issue for closure
       id: monitor-issue
       uses: actions/github-script@v5
+      timeout-minutes: 60  # Set timeout duration for 1 hour
       with:
         script: |
           const issueNumber = '${{ steps.create-issue.outputs.issue-number }}';
+          const timeoutDuration = 3600000;  // 1 hour in milliseconds
+          const startTime = Date.now();
+
           const checkIssueClosed = async () => {
             const { data: issue } = await github.rest.issues.get({
               owner: context.repo.owner,
@@ -157,16 +161,23 @@ jobs:
               core.info('Issue is closed. Marking workflow as successful.');
               core.setOutput('issue-closed', true);
               return;
+            } else if (Date.now() - startTime > timeoutDuration) {
+              core.info('Timeout reached. Closing issue and marking workflow as successful.');
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                state: 'closed',
+                body: issue.body + '\n\nClosed automatically due to timeout.'
+              });
+              core.setOutput('issue-closed', true);
+              return;
             } else {
               core.info('Issue is still open. Continuing...');
               setTimeout(checkIssueClosed, 60000);
             }
           };
           await checkIssueClosed();
-
-    - name: Sleep for interaction period
-      run: sleep 3600  # Keep services alive for 1 hour
-      continue-on-error: true
 
     - name: Set failure status
       if: failure()
