@@ -91,8 +91,10 @@ jobs:
       id: get-ngrok-urls
       run: |
         sleep 5  # Wait for ngrok to start
-        NGROK_WEB_URLS=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name | contains("web")) | .public_url')
-        echo "::set-output name=web_urls::$NGROK_WEB_URLS"
+        NGROK_WEB_URL=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name | contains("web")) | .public_url')
+        NGROK_SSH_URL=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name | contains("ssh")) | .public_url')
+        echo "::set-output name=web_url::$NGROK_WEB_URL"
+        echo "::set-output name=ssh_url::$NGROK_SSH_URL"
 
     - name: Base64 encode SSH private key
       id: encode-ssh-key
@@ -102,10 +104,10 @@ jobs:
 
     - name: Update issue body file
       run: |
-        SSH_HOST=$(echo ${{ steps.get-ngrok-urls.outputs.web_urls }} | sed 's/tcp:\/\///' | cut -d: -f1)
-        SSH_PORT=$(echo ${{ steps.get-ngrok-urls.outputs.web_urls }} | sed 's/tcp:\/\///' | cut -d: -f2)
+        SSH_HOST=$(echo ${{ steps.get-ngrok-urls.outputs.ssh_url }} | sed 's/tcp:\/\///' | cut -d: -f1)
+        SSH_PORT=$(echo ${{ steps.get-ngrok-urls.outputs.ssh_url }} | sed 's/tcp:\/\///' | cut -d: -f2)
         echo "Your services are available at the following URLs:" > issue_body.md
-        echo "Web services: ${{ steps.get-ngrok-urls.outputs.web_urls }}" >> issue_body.md
+        echo "Web service: ${{ steps.get-ngrok-urls.outputs.web_url }}" >> issue_body.md
         echo "" >> issue_body.md
         echo "SSH into the runner using the following command:" >> issue_body.md
         echo "\`\`\`" >> issue_body.md
