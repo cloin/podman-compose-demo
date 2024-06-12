@@ -8,6 +8,11 @@ on:
         required: true
         default: 'podman-compose.yml'
         type: string
+      use-ngrok:
+        description: 'Use ngrok for tunneling (default: false)'
+        required: true
+        default: false
+        type: boolean
   workflow_call:
     inputs:
       podman-compose-path:
@@ -15,6 +20,11 @@ on:
         required: true
         default: 'podman-compose.yml'
         type: string
+      use-ngrok:
+        description: 'Use ngrok for tunneling (default: false)'
+        required: true
+        default: false
+        type: boolean
     secrets:
       NGROK_AUTH_TOKEN:
         required: false
@@ -70,20 +80,19 @@ jobs:
     - name: Start services with podman-compose
       run: |
         podman-compose -f "${{ inputs.podman-compose-path }}" up -d
-        sleep 10  # Wait for services to start
+        sleep 10
 
     - name: Verify services are running
       run: |
         podman-compose -f "${{ inputs.podman-compose-path }}" ps
 
-    # Download and generate tunnel configurations
     - name: Download generate_localtunnel_commands.py script
-      if: ${{ !secrets.NGROK_AUTH_TOKEN }}
+      if: ${{ inputs.use-ngrok == false }}
       run: |
         curl -O https://raw.githubusercontent.com/cloin/podman-compose-demo/main/.github/workflows/generate_localtunnel_commands.py
 
     - name: Create LocalTunnel commands
-      if: ${{ !secrets.NGROK_AUTH_TOKEN }}
+      if: ${{ inputs.use-ngrok == false }}
       env:
         PODMAN_COMPOSE_PATH: ${{ inputs.podman-compose-path }}
       run: |
@@ -91,12 +100,12 @@ jobs:
         chmod +x localtunnel_commands.sh
 
     - name: Download generate_ngrok_config.py script
-      if: ${{ secrets.NGROK_AUTH_TOKEN }}
+      if: ${{ inputs.use-ngrok == true }}
       run: |
         curl -O https://raw.githubusercontent.com/cloin/podman-compose-demo/main/.github/workflows/generate_ngrok_config.py
 
     - name: Create ngrok configuration file
-      if: ${{ secrets.NGROK_AUTH_TOKEN }}
+      if: ${{ inputs.use-ngrok == true }}
       env:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
         PODMAN_COMPOSE_PATH: ${{ inputs.podman-compose-path }}
@@ -104,65 +113,57 @@ jobs:
         python generate_ngrok_config.py
 
     - name: Display tunnel configuration
-      if: ${{ secrets.NGROK_AUTH_TOKEN }}
+      if: ${{ inputs.use-ngrok == true }}
       run: cat ngrok.yml
 
-    # Install LocalTunnel
     - name: Install LocalTunnel
-      if: ${{ !secrets.NGROK_AUTH_TOKEN }}
+      if: ${{ inputs.use-ngrok == false }}
       run: npm install -g localtunnel
 
-    # Install ngrok
     - name: Install ngrok
-      if: ${{ secrets.NGROK_AUTH_TOKEN }}
+      if: ${{ inputs.use-ngrok == true }}
       run: |
         curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null && \
         echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list && \
         sudo apt-get update && sudo apt-get install ngrok
 
-    # Start LocalTunnel
     - name: Start LocalTunnel
-      if: ${{ !secrets.NGROK_AUTH_TOKEN }}
+      if: ${{ inputs.use-ngrok == false }}
       run: ./localtunnel_commands.sh
 
-    # Start ngrok with configuration file
     - name: Start ngrok with configuration file
-      if: ${{ secrets.NGROK_AUTH_TOKEN }}
+      if: ${{ inputs.use-ngrok == true }}
       run: ngrok start --config ngrok.yml --all &
 
-    # Get LocalTunnel URLs
     - name: Get LocalTunnel URLs
       id: get-localtunnel-urls
-      if: ${{ !secrets.NGROK_AUTH_TOKEN }}
+      if: ${{ inputs.use-ngrok == false }}
       run: |
-        sleep 5  # Wait for LocalTunnel to start
+        sleep 5
         WEB_URL=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name | contains("web")) | .public_url')
         SSH_URL=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="ssh") | .public_url')
         echo "::set-output name=web_url::$WEB_URL"
         echo "::set-output name=ssh_url::$SSH_URL"
 
-    # Get ngrok URLs
     - name: Get ngrok URLs
       id: get-ngrok-urls
-      if: ${{ secrets.NGROK_AUTH_TOKEN }}
+      if: ${{ inputs.use-ngrok == true }}
       run: |
-        sleep 5  # Wait for ngrok to start
+        sleep 5
         NGROK_WEB_URL=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name | contains("web")) | .public_url')
         NGROK_SSH_URL=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="ssh") | .public_url')
         echo "::set-output name=web_url::$NGROK_WEB_URL"
         echo "::set-output name=ssh_url::$NGROK_SSH_URL"
 
-    # Base64 encode SSH private key
     - name: Base64 encode SSH private key
       id: encode-ssh-key
       run: |
         base64 -w 0 ~/.ssh/id_rsa > id_rsa_base64
         echo "::set-output name=ssh_key_base64::$(cat id_rsa_base64)"
 
-    # Update issue body file
     - name: Update issue body file
       run: |
-        if [ -z "${{ secrets.NGROK_AUTH_TOKEN }}" ]; then
+        if [ "${{ inputs.use-ngrok }}" == false ]; then
           SSH_HOST=$(echo ${{ steps.get-localtunnel-urls.outputs.ssh_url }} | sed -E 's#^tcp://(.*):(.*)$#\1#')
           SSH_PORT=$(echo ${{ steps.get-localtunnel-urls.outputs.ssh_url }} | sed -E 's#^tcp://(.*):(.*)$#\2#')
           WEB_URL=${{ steps.get-localtunnel-urls.outputs.web_url }}
@@ -181,7 +182,6 @@ jobs:
         echo "ssh -i id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no runner@${SSH_HOST} -p ${SSH_PORT}" >> issue_body.md
         echo "\`\`\`" >> issue_body.md
 
-    # Update issue with environment details
     - name: Update issue with environment details
       uses: actions/github-script@v5
       with:
@@ -195,15 +195,14 @@ jobs:
             body: issueBody
           });
 
-    # Monitor issue for closure
     - name: Monitor issue for closure
       id: monitor-issue
       uses: actions/github-script@v5
-      timeout-minutes: 60  # Set timeout duration for 1 hour
+      timeout-minutes: 60
       with:
         script: |
           const issueNumber = '${{ steps.create-issue.outputs.issue-number }}';
-          const timeoutDuration = 3600000;  // 1 hour in milliseconds
+          const timeoutDuration = 3600000;
           const startTime = Date.now();
 
           const checkIssueClosed = async () => {
@@ -234,22 +233,19 @@ jobs:
           };
           await checkIssueClosed();
 
-    # Set failure status
     - name: Set failure status
       if: failure()
       run: echo "Setting workflow status to failure..."
       env:
         FAILURE: true
 
-    # Cleanup
     - name: Cleanup
       if: always()
       run: |
         podman-compose -f "${{ inputs.podman-compose-path }}" down
-        pkill -f lt || true  # Ensure LocalTunnel processes are killed
-        pkill -f ngrok || true  # Ensure ngrok processes are killed
+        pkill -f lt || true
+        pkill -f ngrok || true
 
-    # Close issue with comment
     - name: Close issue with comment
       if: always()
       run: |
@@ -258,11 +254,10 @@ jobs:
           -d "{\"body\": \"Closing this issue as the session has ended.\", \"state\": \"closed\"}" \
           "https://api.github.com/repos/${{ github.repository }}/issues/${ISSUE_NUMBER}"
 
-    # Report success
     - name: Report success
       if: steps.monitor-issue.outputs.issue-closed == 'true'
       run: echo "Workflow completed successfully."
 
-    # Report failure
+    - name: Report failure
       if: env.FAILURE == 'true'
       run: echo "Workflow failed."
