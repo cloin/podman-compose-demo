@@ -19,7 +19,7 @@ on:
       NGROK_AUTH_TOKEN:
         required: true
 
-permissions:
+permissions: 
   contents: write
   issues: write
   actions: write
@@ -103,7 +103,7 @@ jobs:
       id: get-ngrok-urls
       run: |
         sleep 5  # Wait for ngrok to start
-        NGROK_TUNNELS=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | "\(.name):\(.public_url)"')
+        NGROK_TUNNELS=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | "\(.name) \(.public_url)"')
         echo "$NGROK_TUNNELS" > ngrok_tunnels.txt
         echo "::set-output name=tunnels::$NGROK_TUNNELS"
 
@@ -117,8 +117,8 @@ jobs:
       run: |
         echo "Your services are available at the following URLs:" > issue_body.md
         while IFS= read -r line; do
-          service_name=$(echo "$line" | cut -d: -f1)
-          url=$(echo "$line" | cut -d: -f2)
+          service_name=$(echo "$line" | awk '{print $1}')
+          url=$(echo "$line" | awk '{print $2}')
           echo "$service_name: $url" >> issue_body.md
         done < ngrok_tunnels.txt
         echo "" >> issue_body.md
@@ -126,7 +126,7 @@ jobs:
         echo "\`\`\`" >> issue_body.md
         echo "echo \"${{ steps.encode-ssh-key.outputs.ssh_key_base64 }}\" | base64 --decode > id_rsa" >> issue_body.md
         echo "chmod 600 id_rsa" >> issue_body.md
-        SSH_TUNNEL_URL=$(grep 'ssh' ngrok_tunnels.txt | cut -d: -f2)
+        SSH_TUNNEL_URL=$(grep 'ssh' ngrok_tunnels.txt | awk '{print $2}')
         echo "ssh -i id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no runner@${SSH_TUNNEL_URL}" >> issue_body.md
         echo "\`\`\`" >> issue_body.md
 
