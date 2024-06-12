@@ -86,9 +86,19 @@ jobs:
     - name: Get LocalTunnel URLs
       id: get-localtunnel-urls
       run: |
-        sleep 5  # Wait for localtunnel to start
-        WEB_TUNNEL_URL=$(cat web_tunnel_url.txt | grep -o 'https://[a-zA-Z0-9\.]*')
-        SSH_TUNNEL_URL=$(cat ssh_tunnel_url.txt | grep -o 'https://[a-zA-Z0-9\.]*')
+        sleep 10  # Wait for localtunnel to start
+        echo "Web tunnel file content:"
+        cat web_tunnel_url.txt || echo "Web tunnel file not found"
+        echo "SSH tunnel file content:"
+        cat ssh_tunnel_url.txt || echo "SSH tunnel file not found"
+        WEB_TUNNEL_URL=$(grep -o 'https://[a-zA-Z0-9\.]*' web_tunnel_url.txt || echo "no-url")
+        SSH_TUNNEL_URL=$(grep -o 'https://[a-zA-Z0-9\.]*' ssh_tunnel_url.txt || echo "no-url")
+        echo "Web tunnel URL: $WEB_TUNNEL_URL"
+        echo "SSH tunnel URL: $SSH_TUNNEL_URL"
+        if [[ $WEB_TUNNEL_URL == "no-url" || $SSH_TUNNEL_URL == "no-url" ]]; then
+          echo "Failed to get localtunnel URLs"
+          exit 1
+        fi
         echo "::set-output name=web_url::$WEB_TUNNEL_URL"
         echo "::set-output name=ssh_url::$SSH_TUNNEL_URL"
 
