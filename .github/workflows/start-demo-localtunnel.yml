@@ -84,12 +84,14 @@ jobs:
         lt --port 22 --subdomain ssh > ssh_tunnel_url.txt &
 
     - name: Get localtunnel files
-      run: cat *_tunnel_url.txt
+      run: |
+        sleep 20
+        cat *_tunnel_url.txt
 
     - name: Get LocalTunnel URLs
       id: get-localtunnel-urls
       run: |
-        sleep 10  # Wait for localtunnel to start
+        sleep 20  # Wait for localtunnel to start
         echo "Web tunnel file content:"
         cat web_tunnel_url.txt || echo "Web tunnel file not found"
         echo "SSH tunnel file content:"
