@@ -129,7 +129,7 @@ jobs:
 
     - name: Start LocalTunnel
       if: ${{ inputs.use-ngrok == false }}
-      run: ./localtunnel_commands.sh
+      run: ./localtunnel_commands.sh &
 
     - name: Start ngrok with configuration file
       if: ${{ inputs.use-ngrok == true }}
@@ -139,7 +139,7 @@ jobs:
       id: get-localtunnel-urls
       if: ${{ inputs.use-ngrok == false }}
       run: |
-        sleep 5
+        sleep 15
         WEB_URL=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name | contains("web")) | .public_url')
         SSH_URL=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="ssh") | .public_url')
         LT_PASSWORD=$(curl --silent https://loca.lt/mytunnelpassword)
@@ -151,7 +151,7 @@ jobs:
       id: get-ngrok-urls
       if: ${{ inputs.use-ngrok == true }}
       run: |
-        sleep 5
+        sleep 15
         NGROK_WEB_URL=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name | contains("web")) | .public_url')
         NGROK_SSH_URL=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="ssh") | .public_url')
         echo "::set-output name=web_url::$NGROK_WEB_URL"
@@ -262,9 +262,9 @@ jobs:
           "https://api.github.com/repos/${{ github.repository }}/issues/${ISSUE_NUMBER}"
 
     - name: Report success
-      if: steps.monitor-issue.outputs.issue-closed == 'true'
+      if: steps.monitor-issue.outputs.issue-closed == true
       run: echo "Workflow completed successfully."
 
     - name: Report failure
-      if: env.FAILURE == 'true'
+      if: env.FAILURE == true
       run: echo "Workflow failed."
