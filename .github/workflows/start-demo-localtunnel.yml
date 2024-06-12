@@ -131,6 +131,10 @@ jobs:
       if: ${{ inputs.use-ngrok == false }}
       run: cat localtunnel_commands.sh; curl --silent http://localhost:4040/api/tunnels
 
+    - name: Show LocalTunnel commands 2
+      if: ${{ inputs.use-ngrok == false }}
+      run: curl http://localhost:4040/api/tunnels
+
     - name: Start LocalTunnel
       if: ${{ inputs.use-ngrok == false }}
       run: ./localtunnel_commands.sh &
