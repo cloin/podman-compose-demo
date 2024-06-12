@@ -91,14 +91,10 @@ jobs:
       run: |
         npm install -g localtunnel
 
-    - name: Download generate_localtunnel_commands.js script
+    - name: Run LocalTunnel Script
       if: ${{ inputs.use-ngrok == false }}
       run: |
         curl -O https://raw.githubusercontent.com/cloin/podman-compose-demo/main/.github/workflows/generate_localtunnel_commands.js
-
-    - name: Start LocalTunnel
-      if: ${{ inputs.use-ngrok == false }}
-      run: |
         node generate_localtunnel_commands.js
 
     - name: Download generate_ngrok_config.py script
