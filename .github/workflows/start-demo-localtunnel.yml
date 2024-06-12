@@ -83,6 +83,9 @@ jobs:
       run: |
         lt --port 22 --subdomain ssh > ssh_tunnel_url.txt &
 
+    - name: Get localtunnel files
+      run: cat *_tunnel_url.txt
+
     - name: Get LocalTunnel URLs
       id: get-localtunnel-urls
       run: |
