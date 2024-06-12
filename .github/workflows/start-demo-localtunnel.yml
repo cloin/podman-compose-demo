@@ -53,19 +53,6 @@ jobs:
         pip3 install podman-compose==1.0.6 pyyaml==5.4.1 requests==2.25.1
         npm install -g localtunnel
 
-    - name: Create package.json for localtunnel
-      run: |
-        echo '{
-          "name": "localtunnel-script",
-          "version": "1.0.0",
-          "description": "Localtunnel API script",
-          "main": "generate_localtunnel_commands.js",
-          "dependencies": {
-            "localtunnel": "^2.0.0"
-          }
-        }' > package.json
-        npm install
-
     - name: Start SSH service
       run: |
         sudo systemctl start ssh
@@ -88,14 +75,20 @@ jobs:
       run: |
         podman-compose -f "${{ inputs.podman-compose-path }}" ps
 
-    - name: Generate localtunnel commands
-      run: node generate_localtunnel_commands.js
+    - name: Start LocalTunnel for web service
+      run: |
+        lt --port 8080 --subdomain web1-8080 > web_tunnel_url.txt &
 
-    - name: Get localtunnel URLs
+    - name: Start LocalTunnel for SSH service
+      run: |
+        lt --port 22 --subdomain ssh > ssh_tunnel_url.txt &
+
+    - name: Get LocalTunnel URLs
       id: get-localtunnel-urls
       run: |
-        WEB_TUNNEL_URL=$(cat web_tunnel_url.txt)
-        SSH_TUNNEL_URL=$(cat ssh_tunnel_url.txt)
+        sleep 5  # Wait for localtunnel to start
+        WEB_TUNNEL_URL=$(cat web_tunnel_url.txt | grep -o 'https://[a-zA-Z0-9\.]*')
+        SSH_TUNNEL_URL=$(cat ssh_tunnel_url.txt | grep -o 'https://[a-zA-Z0-9\.]*')
         echo "::set-output name=web_url::$WEB_TUNNEL_URL"
         echo "::set-output name=ssh_url::$SSH_TUNNEL_URL"
 
@@ -107,10 +100,8 @@ jobs:
 
     - name: Update issue body file
       run: |
-        SSH_HOST=$(echo ${{ steps.get-localtunnel-urls.outputs.ssh_url }} | sed -E 's#^https://(.*):(.*)$#\1#')
-        SSH_PORT=$(echo ${{ steps.get-localtunnel-urls.outputs.ssh_url }} | sed -E 's#^https://(.*):(.*)$#\2#')
+        SSH_HOST=$(echo ${{ steps.get-localtunnel-urls.outputs.ssh_url }} | sed -E 's#^https://(.*)$#\1#')
         WEB_URL=${{ steps.get-localtunnel-urls.outputs.web_url }}
-
         echo "Your services are available at the following URLs:" > issue_body.md
         echo "Web service: $WEB_URL" >> issue_body.md
         echo "" >> issue_body.md
@@ -118,7 +109,7 @@ jobs:
         echo "\`\`\`" >> issue_body.md
         echo "echo \"${{ steps.encode-ssh-key.outputs.ssh_key_base64 }}\" | base64 --decode > id_rsa" >> issue_body.md
         echo "chmod 600 id_rsa" >> issue_body.md
-        echo "ssh -i id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no runner@$SSH_HOST -p $SSH_PORT" >> issue_body.md
+        echo "ssh -i id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no runner@$SSH_HOST" >> issue_body.md
         echo "\`\`\`" >> issue_body.md
 
     - name: Update issue with environment details
