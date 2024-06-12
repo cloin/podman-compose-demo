@@ -19,7 +19,7 @@ on:
       NGROK_AUTH_TOKEN:
         required: true
 
-permissions:
+permissions: 
   contents: write
   issues: write
   actions: write
