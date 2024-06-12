@@ -119,15 +119,20 @@ jobs:
         while IFS= read -r line; do
           service_name=$(echo "$line" | awk '{print $1}')
           url=$(echo "$line" | awk '{print $2}')
-          echo "$service_name: $url" >> issue_body.md
+          if [[ "$service_name" != "ssh" ]]; then
+            echo "$service_name: $url" >> issue_body.md
+          else
+            ssh_url="$url"
+          fi
         done < ngrok_tunnels.txt
         echo "" >> issue_body.md
         echo "SSH into the runner using the following command:" >> issue_body.md
         echo "\`\`\`" >> issue_body.md
         echo "echo \"${{ steps.encode-ssh-key.outputs.ssh_key_base64 }}\" | base64 --decode > id_rsa" >> issue_body.md
         echo "chmod 600 id_rsa" >> issue_body.md
-        SSH_TUNNEL_URL=$(grep 'ssh' ngrok_tunnels.txt | awk '{print $2}')
-        echo "ssh -i id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no runner@${SSH_TUNNEL_URL}" >> issue_body.md
+        SSH_HOST=$(echo "$ssh_url" | sed -E 's#^tcp://(.*):(.*)$#\1#')
+        SSH_PORT=$(echo "$ssh_url" | sed -E 's#^tcp://(.*):(.*)$#\2#')
+        echo "ssh -i id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no runner@$SSH_HOST -p $SSH_PORT" >> issue_body.md
         echo "\`\`\`" >> issue_body.md
 
     - name: Update issue with environment details
