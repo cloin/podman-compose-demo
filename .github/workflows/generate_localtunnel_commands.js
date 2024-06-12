@@ -9,10 +9,10 @@ const fs = require('fs');
   fs.writeFileSync('ssh_tunnel_url.txt', sshTunnel.url);
 
   webTunnel.on('close', () => {
-    console.log('Web tunnel closed');
+    // tunnels are closed
   });
 
   sshTunnel.on('close', () => {
-    console.log('SSH tunnel closed');
+    // tunnels are closed
   });
 })();
