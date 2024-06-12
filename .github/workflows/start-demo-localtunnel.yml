@@ -86,7 +86,12 @@ jobs:
       run: |
         podman-compose -f "${{ inputs.podman-compose-path }}" ps
 
-    - name: Download generate_localtunnel_commands.py script
+    - name: Install LocalTunnel
+      if: ${{ inputs.use-ngrok == false }}
+      run: |
+        npm install -g localtunnel
+
+    - name: Download generate_localtunnel_commands.js script
       if: ${{ inputs.use-ngrok == false }}
       run: |
         curl -O https://raw.githubusercontent.com/cloin/podman-compose-demo/main/.github/workflows/generate_localtunnel_commands.js
