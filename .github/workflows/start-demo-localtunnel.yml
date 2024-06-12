@@ -8,11 +8,7 @@ on:
         required: true
         default: 'podman-compose.yml'
         type: string
-      use-ngrok:
-        description: 'Use ngrok for tunneling (default: false)'
-        required: true
-        default: false
-        type: boolean
+
   workflow_call:
     inputs:
       podman-compose-path:
@@ -20,14 +16,6 @@ on:
         required: true
         default: 'podman-compose.yml'
         type: string
-      use-ngrok:
-        description: 'Use ngrok for tunneling (default: false)'
-        required: true
-        default: false
-        type: boolean
-    secrets:
-      NGROK_AUTH_TOKEN:
-        required: false
 
 permissions:
   contents: write
@@ -100,31 +88,10 @@ jobs:
       run: |
         podman-compose -f "${{ inputs.podman-compose-path }}" ps
 
-    - name: Generate ngrok config
-      if: ${{ inputs.use-ngrok == true }}
-      run: |
-        python generate_ngrok_config.py
-
-    - name: Start ngrok
-      if: ${{ inputs.use-ngrok == true }}
-      run: ngrok start --config ngrok.yml --all &
-
-    - name: Get ngrok URLs
-      if: ${{ inputs.use-ngrok == true }}
-      id: get-ngrok-urls
-      run: |
-        sleep 5  # Wait for ngrok to start
-        NGROK_WEB_URL=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name | contains("web")) | .public_url')
-        NGROK_SSH_URL=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="ssh") | .public_url')
-        echo "::set-output name=web_url::$NGROK_WEB_URL"
-        echo "::set-output name=ssh_url::$NGROK_SSH_URL"
-
     - name: Generate localtunnel commands
-      if: ${{ inputs.use-ngrok == false }}
       run: node generate_localtunnel_commands.js
 
     - name: Get localtunnel URLs
-      if: ${{ inputs.use-ngrok == false }}
       id: get-localtunnel-urls
       run: |
         WEB_TUNNEL_URL=$(cat web_tunnel_url.txt)
@@ -140,15 +107,9 @@ jobs:
 
     - name: Update issue body file
       run: |
-        if [ "${{ inputs.use-ngrok }}" == "true" ]; then
-          SSH_HOST=$(echo ${{ steps.get-ngrok-urls.outputs.ssh_url }} | sed -E 's#^tcp://(.*):(.*)$#\1#')
-          SSH_PORT=$(echo ${{ steps.get-ngrok-urls.outputs.ssh_url }} | sed -E 's#^tcp://(.*):(.*)$#\2#')
-          WEB_URL=${{ steps.get-ngrok-urls.outputs.web_url }}
-        else
-          SSH_HOST=$(echo ${{ steps.get-localtunnel-urls.outputs.ssh_url }} | sed -E 's#^https://(.*):(.*)$#\1#')
-          SSH_PORT=$(echo ${{ steps.get-localtunnel-urls.outputs.ssh_url }} | sed -E 's#^https://(.*):(.*)$#\2#')
-          WEB_URL=${{ steps.get-localtunnel-urls.outputs.web_url }}
-        fi
+        SSH_HOST=$(echo ${{ steps.get-localtunnel-urls.outputs.ssh_url }} | sed -E 's#^https://(.*):(.*)$#\1#')
+        SSH_PORT=$(echo ${{ steps.get-localtunnel-urls.outputs.ssh_url }} | sed -E 's#^https://(.*):(.*)$#\2#')
+        WEB_URL=${{ steps.get-localtunnel-urls.outputs.web_url }}
 
         echo "Your services are available at the following URLs:" > issue_body.md
         echo "Web service: $WEB_URL" >> issue_body.md
@@ -221,7 +182,6 @@ jobs:
       if: always()
       run: |
         podman-compose -f "${{ inputs.podman-compose-path }}" down
-        pkill ngrok || true
         pkill lt || true
 
     - name: Close issue with comment
