@@ -140,9 +140,12 @@ jobs:
       if: ${{ inputs.use-ngrok == false }}
       run: |
         sleep 15
-        WEB_URL=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name | contains("web")) | .public_url')
-        SSH_URL=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="ssh") | .public_url')
+        WEB_URL=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.proto == "http") | .public_url')
+        SSH_URL=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.proto == "tcp") | .public_url')
         LT_PASSWORD=$(curl --silent https://loca.lt/mytunnelpassword)
+        echo "WEB_URL: $WEB_URL"
+        echo "SSH_URL: $SSH_URL"
+        echo "LT_PASSWORD: $LT_PASSWORD"
         echo "::set-output name=web_url::$WEB_URL"
         echo "::set-output name=ssh_url::$SSH_URL"
         echo "::set-output name=lt_password::$LT_PASSWORD"
@@ -154,6 +157,8 @@ jobs:
         sleep 15
         NGROK_WEB_URL=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name | contains("web")) | .public_url')
         NGROK_SSH_URL=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="ssh") | .public_url')
+        echo "NGROK_WEB_URL: $NGROK_WEB_URL"
+        echo "NGROK_SSH_URL: $NGROK_SSH_URL"
         echo "::set-output name=web_url::$NGROK_WEB_URL"
         echo "::set-output name=ssh_url::$NGROK_SSH_URL"
 
