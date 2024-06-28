@@ -41,14 +41,13 @@ jobs:
         run: |
           if [ -f "${{ inputs.demo-stacks-path }}" ]; then
             matrix=$(yq eval -o=json '.stacks' "${{ inputs.demo-stacks-path }}")
-            if [ "$matrix" = "null" ] || [ -z "$matrix" ]; then
-              echo "::set-output name=matrix::[{\"name\":\"default\",\"compose_file\":\"docker-compose.yml\"}]"
-            else
-              echo "::set-output name=matrix::$matrix"
+            if [ "$matrix" = "null" ] || [ -z "$matrix" ] || [ "$matrix" = "[]" ]; then
+              matrix='[{"name":"default","compose_file":"docker-compose.yml"}]'
             fi
           else
-            echo "::set-output name=matrix::[{\"name\":\"default\",\"compose_file\":\"docker-compose.yml\"}]"
+            matrix='[{"name":"default","compose_file":"docker-compose.yml"}]'
           fi
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
       - name: Debug matrix output
         run: |
           echo "Matrix: ${{ steps.set-matrix.outputs.matrix }}"
@@ -59,12 +58,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        stack: ${{fromJson(needs.setup-matrix.outputs.matrix)}}
+        include: ${{fromJson(needs.setup-matrix.outputs.matrix)}}
     env:
       FAILURE: false
       SUCCESS: false
 
     steps:
+    - name: Debug matrix
+      run: |
+        echo "Current stack: ${{ toJson(matrix) }}"
+    
     - name: Create new issue
       id: create-issue
       uses: actions/github-script@v5
@@ -73,7 +76,7 @@ jobs:
           const { data: issue } = await github.rest.issues.create({
             owner: context.repo.owner,
             repo: context.repo.repo,
-            title: `Demo environment access - ${{ matrix.stack.name }} - Job ID: ${context.runId}`,
+            title: `Demo environment access - ${{ matrix.name }} - Job ID: ${context.runId}`,
             body: 'The demo environment is being set up. Details will follow shortly.'
           });
           core.setOutput('issue-number', issue.number);
