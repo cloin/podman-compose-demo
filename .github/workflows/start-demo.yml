@@ -195,7 +195,7 @@ jobs:
     - name: Cleanup
       if: always()
       run: |
-        podman-compose -f "${{ inputs.podman-compose-path }}" down
+        # podman-compose -f "${{ inputs.podman-compose-path }}" down
         pkill ngrok
 
     - name: Close issue with comment
