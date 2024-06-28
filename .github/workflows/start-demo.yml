@@ -32,11 +32,26 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod a+x /usr/local/bin/yq
       - name: Set up matrix
         id: set-matrix
         run: |
-          matrix=$(yq eval -o=json '.stacks' ${{ inputs.demo-stacks-path }})
-          echo "::set-output name=matrix::$matrix"
+          if [ -f "${{ inputs.demo-stacks-path }}" ]; then
+            matrix=$(yq eval -o=json '.stacks' "${{ inputs.demo-stacks-path }}")
+            if [ "$matrix" = "null" ] || [ -z "$matrix" ]; then
+              echo "::set-output name=matrix::[{\"name\":\"default\",\"compose_file\":\"docker-compose.yml\"}]"
+            else
+              echo "::set-output name=matrix::$matrix"
+            fi
+          else
+            echo "::set-output name=matrix::[{\"name\":\"default\",\"compose_file\":\"docker-compose.yml\"}]"
+          fi
+      - name: Debug matrix output
+        run: |
+          echo "Matrix: ${{ steps.set-matrix.outputs.matrix }}"
 
   setup-services:
     needs: setup-matrix
