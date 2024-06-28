@@ -32,10 +32,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-      - name: Install yq
+      - name: Install yq and jq
         run: |
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod a+x /usr/local/bin/yq
+          sudo apt-get update && sudo apt-get install -y jq
       - name: Set up matrix
         id: set-matrix
         run: |
@@ -47,7 +48,8 @@ jobs:
           else
             matrix='[{"name":"default","compose_file":"docker-compose.yml"}]'
           fi
-          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          escaped_matrix=$(echo "$matrix" | jq -c -R '.')
+          echo "matrix=$escaped_matrix" >> $GITHUB_OUTPUT
       - name: Debug matrix output
         run: |
           echo "Matrix: ${{ steps.set-matrix.outputs.matrix }}"
