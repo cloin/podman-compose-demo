@@ -1,0 +1,7 @@
+stacks:
+  - name: web-stack
+    compose_file: podman-compose.yml
+  # - name: database-stack
+  #   compose_file: db/podman-compose.yml
+  # - name: cache-stack
+  #   compose_file: cache/podman-compose.yml

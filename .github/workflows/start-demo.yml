@@ -1,19 +1,19 @@
-name: Start Demo
+name: Start Demo Stacks
 
 on:
   workflow_dispatch:
     inputs:
-      podman-compose-path:
-        description: 'Path to the podman-compose.yml file'
+      demo-stacks-path:
+        description: 'Path to the demo-stacks.yml file'
         required: true
-        default: 'podman-compose.yml'
+        default: 'demo-stacks.yml'
         type: string
   workflow_call:
     inputs:
-      podman-compose-path:
-        description: 'Path to the podman-compose.yml file'
+      demo-stacks-path:
+        description: 'Path to the demo-stacks.yml file'
         required: true
-        default: 'podman-compose.yml'
+        default: 'demo-stacks.yml'
         type: string
     secrets:
       NGROK_AUTH_TOKEN:
@@ -25,10 +25,26 @@ permissions:
   actions: write
 
 jobs:
+  setup-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Set up matrix
+        id: set-matrix
+        run: |
+          matrix=$(yq eval -o=json '.stacks' ${{ inputs.demo-stacks-path }})
+          echo "::set-output name=matrix::$matrix"
+
   setup-services:
+    needs: setup-matrix
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      matrix:
+        stack: ${{fromJson(needs.setup-matrix.outputs.matrix)}}
     env:
       FAILURE: false
       SUCCESS: false
@@ -42,7 +58,7 @@ jobs:
           const { data: issue } = await github.rest.issues.create({
             owner: context.repo.owner,
             repo: context.repo.repo,
-            title: `Demo environment access - Job ID: ${context.runId}`,
+            title: `Demo environment access - ${{ matrix.stack.name }} - Job ID: ${context.runId}`,
             body: 'The demo environment is being set up. Details will follow shortly.'
           });
           core.setOutput('issue-number', issue.number);
@@ -69,12 +85,12 @@ jobs:
 
     - name: Start services with podman-compose
       run: |
-        podman-compose -f "${{ inputs.podman-compose-path }}" up -d
+        podman-compose -f "${{ matrix.stack.compose_file }}" up -d
         sleep 10  # Wait for services to start
 
     - name: Verify services are running
       run: |
-        podman-compose -f "${{ inputs.podman-compose-path }}" ps
+        podman-compose -f "${{ matrix.stack.compose_file }}" ps
 
     - name: Download generate_ngrok_config.py script
       run: |
@@ -83,7 +99,8 @@ jobs:
     - name: Create ngrok configuration file
       env:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
-        PODMAN_COMPOSE_PATH: ${{ inputs.podman-compose-path }}
+        PODMAN_COMPOSE_PATH: ${{ matrix.stack.compose_file }}
+        STACK_NAME: ${{ matrix.stack.name }}
       run: |
         python generate_ngrok_config.py
 
@@ -115,7 +132,7 @@ jobs:
 
     - name: Update issue body file
       run: |
-        echo "Your services are available at the following URLs:" > issue_body.md
+        echo "Your services for ${{ matrix.stack.name }} are available at the following URLs:" > issue_body.md
         while IFS= read -r line; do
           service_name=$(echo "$line" | awk '{print $1}')
           url=$(echo "$line" | awk '{print $2}')
@@ -147,6 +164,12 @@ jobs:
             issue_number: '${{ steps.create-issue.outputs.issue-number }}',
             body: issueBody
           });
+
+    - name: Upload tunnel info
+      uses: actions/upload-artifact@v2
+      with:
+        name: tunnel-info-${{ matrix.stack.name }}
+        path: tunnel_info.json
 
     - name: Monitor issue for closure
       id: monitor-issue
@@ -195,7 +218,7 @@ jobs:
     - name: Cleanup
       if: always()
       run: |
-        # podman-compose -f "${{ inputs.podman-compose-path }}" down
+        podman-compose -f "${{ matrix.stack.compose_file }}" down
         pkill ngrok
 
     - name: Close issue with comment
@@ -213,3 +236,22 @@ jobs:
     - name: Report failure
       if: env.FAILURE == 'true'
       run: echo "Workflow failed."
+
+  # combine-tunnel-infos:
+  #   needs: setup-services
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: Download all tunnel infos
+  #     uses: actions/download-artifact@v2
+  #     with:
+  #       path: all-tunnel-infos
+
+  #   - name: Combine tunnel infos
+  #     run: |
+  #       jq -s 'reduce .[] as $item ({}; . * $item)' all-tunnel-infos/*/tunnel_info.json > combined_tunnel_info.json
+
+  #   - name: Upload combined tunnel info
+  #     uses: actions/upload-artifact@v2
+  #     with:
+  #       name: combined-tunnel-info
+  #       path: combined_tunnel_info.json
