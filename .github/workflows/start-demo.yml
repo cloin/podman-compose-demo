@@ -1,19 +1,20 @@
-name: Start Demo Stacks
+name: Start Demo
 
 on:
-  workflow_dispatch:
-    inputs:
-      demo-stacks-path:
-        description: 'Path to the demo-stacks.yml file'
-        required: true
-        default: 'demo-stacks.yml'
-        type: string
   workflow_call:
     inputs:
-      demo-stacks-path:
-        description: 'Path to the demo-stacks.yml file'
+      matrix:
+        description: 'Matrix configuration for the Podman stacks'
         required: true
-        default: 'demo-stacks.yml'
+        type: object
+      issue-number:
+        description: 'Issue number to update'
+        required: true
+        type: number
+      config-file:
+        description: 'Path to the configuration YAML file'
+        required: true
+        default: 'podman-stacks-config.yml'
         type: string
     secrets:
       NGROK_AUTH_TOKEN:
@@ -25,67 +26,16 @@ permissions:
   actions: write
 
 jobs:
-  setup-matrix:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-      - name: Install yq
-        run: |
-          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
-          sudo chmod a+x /usr/local/bin/yq
-      - name: Set up matrix
-        id: set-matrix
-        run: |
-          if [ -f "${{ inputs.demo-stacks-path }}" ]; then
-            matrix=$(yq eval -o=json '.stacks' "${{ inputs.demo-stacks-path }}")
-            if [ "$matrix" = "null" ] || [ -z "$matrix" ] || [ "$matrix" = "[]" ]; then
-              matrix='[{"name":"default","compose_file":"docker-compose.yml"}]'
-            fi
-          else
-            matrix='[{"name":"default","compose_file":"docker-compose.yml"}]'
-          fi
-          cat << EOF >> $GITHUB_OUTPUT
-          matrix<<EOF_MATRIX
-          $matrix
-          EOF_MATRIX
-          EOF
-      - name: Debug matrix output
-        run: |
-          echo "Matrix:"
-          cat $GITHUB_OUTPUT
-
   setup-services:
-    needs: setup-matrix
     runs-on: ubuntu-latest
     strategy:
+      matrix: ${{ inputs.matrix.include }}
       fail-fast: false
-      matrix:
-        include: ${{fromJson(needs.setup-matrix.outputs.matrix)}}
     env:
       FAILURE: false
       SUCCESS: false
 
     steps:
-    - name: Debug matrix
-      run: |
-        echo "Current stack: ${{ toJson(matrix) }}"
-    
-    - name: Create new issue
-      id: create-issue
-      uses: actions/github-script@v5
-      with:
-        script: |
-          const { data: issue } = await github.rest.issues.create({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            title: `Demo environment access - ${{ matrix.name }} - Job ID: ${context.runId}`,
-            body: 'The demo environment is being set up. Details will follow shortly.'
-          });
-          core.setOutput('issue-number', issue.number);
-
     - name: Checkout repository
       uses: actions/checkout@v2
 
@@ -108,12 +58,12 @@ jobs:
 
     - name: Start services with podman-compose
       run: |
-        podman-compose -f "${{ matrix.stack.compose_file }}" up -d
+        podman-compose -f "${{ matrix.path }}" up -d
         sleep 10  # Wait for services to start
 
     - name: Verify services are running
       run: |
-        podman-compose -f "${{ matrix.stack.compose_file }}" ps
+        podman-compose -f "${{ matrix.path }}" ps
 
     - name: Download generate_ngrok_config.py script
       run: |
@@ -122,8 +72,7 @@ jobs:
     - name: Create ngrok configuration file
       env:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
-        PODMAN_COMPOSE_PATH: ${{ matrix.stack.compose_file }}
-        STACK_NAME: ${{ matrix.stack.name }}
+        PODMAN_COMPOSE_PATH: ${{ matrix.path }}
       run: |
         python generate_ngrok_config.py
 
@@ -155,12 +104,12 @@ jobs:
 
     - name: Update issue body file
       run: |
-        echo "Your services for ${{ matrix.stack.name }} are available at the following URLs:" > issue_body.md
+        echo "Your services are available at the following URLs:" >> issue_body.md
         while IFS= read -r line; do
           service_name=$(echo "$line" | awk '{print $1}')
           url=$(echo "$line" | awk '{print $2}')
           if [[ "$service_name" != "ssh" ]]; then
-            echo "$service_name: $url" >> issue_body.md
+            echo "${{ matrix.name }}-$service_name: $url" >> issue_body.md
           else
             ssh_url="$url"
           fi
@@ -181,18 +130,13 @@ jobs:
         script: |
           const fs = require('fs');
           const issueBody = fs.readFileSync('issue_body.md', 'utf8');
+          const issueNumber = '${{ inputs.issue-number }}';
           await github.rest.issues.update({
             owner: context.repo.owner,
             repo: context.repo.repo,
-            issue_number: '${{ steps.create-issue.outputs.issue-number }}',
+            issue_number: issueNumber,
             body: issueBody
           });
-
-    - name: Upload tunnel info
-      uses: actions/upload-artifact@v2
-      with:
-        name: tunnel-info-${{ matrix.stack.name }}
-        path: tunnel_info.json
 
     - name: Monitor issue for closure
       id: monitor-issue
@@ -200,7 +144,7 @@ jobs:
       timeout-minutes: 60  # Set timeout duration for 1 hour
       with:
         script: |
-          const issueNumber = '${{ steps.create-issue.outputs.issue-number }}';
+          const issueNumber = '${{ inputs.issue-number }}';
           const timeoutDuration = 3600000;  // 1 hour in milliseconds
           const startTime = Date.now();
 
@@ -241,13 +185,13 @@ jobs:
     - name: Cleanup
       if: always()
       run: |
-        podman-compose -f "${{ matrix.stack.compose_file }}" down
+        podman-compose -f "${{ matrix.path }}" down
         pkill ngrok
 
     - name: Close issue with comment
       if: always()
       run: |
-        ISSUE_NUMBER=${{ steps.create-issue.outputs.issue-number }}
+        ISSUE_NUMBER=${{ inputs.issue-number }}
         curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
           -d "{\"body\": \"Closing this issue as the session has ended.\", \"state\": \"closed\"}" \
           "https://api.github.com/repos/${{ github.repository }}/issues/${ISSUE_NUMBER}"
@@ -259,22 +203,3 @@ jobs:
     - name: Report failure
       if: env.FAILURE == 'true'
       run: echo "Workflow failed."
-
-  # combine-tunnel-infos:
-  #   needs: setup-services
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #   - name: Download all tunnel infos
-  #     uses: actions/download-artifact@v2
-  #     with:
-  #       path: all-tunnel-infos
-
-  #   - name: Combine tunnel infos
-  #     run: |
-  #       jq -s 'reduce .[] as $item ({}; . * $item)' all-tunnel-infos/*/tunnel_info.json > combined_tunnel_info.json
-
-  #   - name: Upload combined tunnel info
-  #     uses: actions/upload-artifact@v2
-  #     with:
-  #       name: combined-tunnel-info
-  #       path: combined_tunnel_info.json

@@ -1,0 +1,67 @@
+name: Setup Demo Environment
+
+on:
+  workflow_dispatch:
+    inputs:
+      config-file:
+        description: 'Path to the configuration YAML file'
+        required: true
+        default: 'podman-stacks-config.yml'
+        type: string
+
+permissions: 
+  contents: write
+  issues: write
+  actions: write
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      issue-number: ${{ steps.create-issue.outputs.issue-number }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Read configuration file
+      id: read-config
+      run: |
+        pip3 install pyyaml
+        python3 -c "
+import yaml
+import json
+with open('${{ github.event.inputs.config-file }}', 'r') as file:
+    config = yaml.safe_load(file)
+matrix = {'include': [{'name': stack['name'], 'path': stack['path']} for stack in config]}
+print('::set-output name=matrix::' + json.dumps(matrix))
+        "
+
+    - name: Create new issue
+      id: create-issue
+      uses: actions/github-script@v5
+      with:
+        script: |
+          const { data: issue } = await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `Demo environment access - Job ID: ${context.runId}`,
+            body: 'The demo environment is being set up. Details will follow shortly.'
+          });
+          core.setOutput('issue-number', issue.number)
+
+    - name: Set matrix
+      id: set-matrix
+      run: echo "::set-output name=matrix::${{ steps.read-config.outputs.matrix }}"
+
+  call-start-demo:
+    needs: setup
+    strategy:
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+    uses: ./.github/workflows/start-demo.yml
+    with:
+      matrix: ${{ matrix }}
+      issue-number: ${{ needs.setup.outputs.issue-number }}
+      config-file: ${{ github.event.inputs.config-file }}
+    secrets: inherit
