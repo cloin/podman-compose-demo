@@ -29,12 +29,12 @@ jobs:
       run: |
         pip3 install pyyaml
         python3 -c "
-import yaml
-import json
-with open('${{ github.event.inputs.config-file }}', 'r') as file:
-    config = yaml.safe_load(file)
-matrix = {'include': [{'name': stack['name'], 'path': stack['path']} for stack in config]}
-print('::set-output name=matrix::' + json.dumps(matrix))
+        import yaml
+        import json
+        with open('${{ github.event.inputs.config-file }}', 'r') as file:
+            config = yaml.safe_load(file)
+        matrix = {'include': [{'name': stack['name'], 'path': stack['path']} for stack in config]}
+        print('::set-output name=matrix::' + json.dumps(matrix))
         "
 
     - name: Create new issue
@@ -59,7 +59,7 @@ print('::set-output name=matrix::' + json.dumps(matrix))
     runs-on: ubuntu-latest
     strategy:
       matrix: ${{ fromJson(needs.setup-demo-environment.outputs.matrix) }}
-    secrets: inherit
+    # secrets: inherit
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
