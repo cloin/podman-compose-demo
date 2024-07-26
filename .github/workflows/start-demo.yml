@@ -33,8 +33,11 @@ jobs:
         import json
         with open('${{ github.event.inputs.config-file }}', 'r') as file:
             config = yaml.safe_load(file)
-        matrix = {'include': [{'name': stack['name'], 'path': stack['path']} for stack in config]}
-        print('::set-output name=matrix::' + json.dumps(matrix))
+        if isinstance(config, list):
+            matrix = {'include': [{'name': stack['name'], 'path': stack['path']} for stack in config]}
+            print('::set-output name=matrix::' + json.dumps(matrix))
+        else:
+            print('::error::Invalid configuration format, expected a list of dictionaries')
         "
 
     - name: Create new issue
