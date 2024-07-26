@@ -15,11 +15,12 @@ permissions:
   actions: write
 
 jobs:
-  setup-demo-environment:
+  setup:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       issue-number: ${{ steps.create-issue.outputs.issue-number }}
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
@@ -58,14 +59,19 @@ jobs:
       run: echo "::set-output name=matrix::${{ steps.read-config.outputs.matrix }}"
 
   start-demo:
-    needs: setup-demo-environment
+    needs: setup
     runs-on: ubuntu-latest
     strategy:
-      matrix: ${{ fromJson(needs.setup-demo-environment.outputs.matrix) }}
-    # secrets: inherit
+      matrix: ${{ fromJson(needs.setup.outputs.matrix || '{}') }}
+      fail-fast: false
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
+
+    - name: Debug matrix
+      run: |
+        echo "Matrix: ${{ needs.setup.outputs.matrix }}"
 
     - name: Install dependencies
       run: |
