@@ -1,24 +1,13 @@
-name: Start Demo
+name: Setup and Start Demo
 
 on:
-  workflow_call:
+  workflow_dispatch:
     inputs:
-      matrix:
-        description: 'Matrix configuration for the Podman stacks'
-        required: true
-        type: object
-      issue-number:
-        description: 'Issue number to update'
-        required: true
-        type: number
       config-file:
         description: 'Path to the configuration YAML file'
         required: true
         default: 'podman-stacks-config.yml'
         type: string
-    secrets:
-      NGROK_AUTH_TOKEN:
-        required: true
 
 permissions: 
   contents: write
@@ -26,20 +15,56 @@ permissions:
   actions: write
 
 jobs:
-  setup-services:
+  setup-demo-environment:
     runs-on: ubuntu-latest
-    strategy:
-      matrix: ${{ inputs.matrix.include }}
-      fail-fast: false
-    env:
-      FAILURE: false
-      SUCCESS: false
-
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      issue-number: ${{ steps.create-issue.outputs.issue-number }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
 
-    - name: Install podman-compose and dependencies
+    - name: Read configuration file
+      id: read-config
+      run: |
+        pip3 install pyyaml
+        python3 -c "
+import yaml
+import json
+with open('${{ github.event.inputs.config-file }}', 'r') as file:
+    config = yaml.safe_load(file)
+matrix = {'include': [{'name': stack['name'], 'path': stack['path']} for stack in config]}
+print('::set-output name=matrix::' + json.dumps(matrix))
+        "
+
+    - name: Create new issue
+      id: create-issue
+      uses: actions/github-script@v5
+      with:
+        script: |
+          const { data: issue } = await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `Demo environment access - Job ID: ${context.runId}`,
+            body: 'The demo environment is being set up. Details will follow shortly.'
+          });
+          core.setOutput('issue-number', issue.number)
+
+    - name: Set matrix
+      id: set-matrix
+      run: echo "::set-output name=matrix::${{ steps.read-config.outputs.matrix }}"
+
+  start-demo:
+    needs: setup-demo-environment
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.setup-demo-environment.outputs.matrix) }}
+    secrets: inherit
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Install dependencies
       run: |
         pip3 install podman-compose==1.0.6 pyyaml==5.4.1 requests==2.25.1
 
@@ -130,7 +155,7 @@ jobs:
         script: |
           const fs = require('fs');
           const issueBody = fs.readFileSync('issue_body.md', 'utf8');
-          const issueNumber = '${{ inputs.issue-number }}';
+          const issueNumber = '${{ needs.setup-demo-environment.outputs.issue-number }}';
           await github.rest.issues.update({
             owner: context.repo.owner,
             repo: context.repo.repo,
@@ -144,7 +169,7 @@ jobs:
       timeout-minutes: 60  # Set timeout duration for 1 hour
       with:
         script: |
-          const issueNumber = '${{ inputs.issue-number }}';
+          const issueNumber = '${{ needs.setup-demo-environment.outputs.issue-number }}';
           const timeoutDuration = 3600000;  // 1 hour in milliseconds
           const startTime = Date.now();
 
@@ -176,12 +201,6 @@ jobs:
           };
           await checkIssueClosed();
 
-    - name: Set failure status
-      if: failure()
-      run: echo "Setting workflow status to failure..."
-      env:
-        FAILURE: true
-
     - name: Cleanup
       if: always()
       run: |
@@ -191,7 +210,7 @@ jobs:
     - name: Close issue with comment
       if: always()
       run: |
-        ISSUE_NUMBER=${{ inputs.issue-number }}
+        ISSUE_NUMBER=${{ needs.setup-demo-environment.outputs.issue-number }}
         curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
           -d "{\"body\": \"Closing this issue as the session has ended.\", \"state\": \"closed\"}" \
           "https://api.github.com/repos/${{ github.repository }}/issues/${ISSUE_NUMBER}"
