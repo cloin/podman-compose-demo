@@ -39,7 +39,7 @@ jobs:
             matrix = {'include': [{'name': stack['name'], 'path': stack.get('compose_file', '')} for stack in stacks]}
             print('::set-output name=matrix::' + json.dumps(matrix))
         else:
-            print('::error::Invalid configuration format, 'stacks' key must be a list')
+            print(\"::error::Invalid configuration format, 'stacks' key must be a list\")
         "
 
     - name: Create new issue
