@@ -54,6 +54,10 @@ jobs:
           });
           core.setOutput('issue-number', issue.number)
 
+    - name: debug matrix
+      run: |
+        echo "Matrix: ${{ steps.read-config.outputs.matrix }}"
+
     - name: Set matrix
       id: set-matrix
       run: echo "::set-output name=matrix::${{ steps.read-config.outputs.matrix }}"
