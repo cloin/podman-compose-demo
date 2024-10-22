@@ -43,7 +43,12 @@ jobs:
         python3 -c "
         import yaml
         import json
-        with open('${{ github.event.inputs.config-file }}', 'r') as file:
+        import os
+        config_file = '${{ inputs.config-file }}'
+        if not config_file or not os.path.isfile(config_file):
+            print('::error::Configuration file not found: ' + config_file)
+            exit(1)
+        with open(config_file, 'r') as file:
             config = yaml.safe_load(file)
         stacks = config.get('stacks', [])
         if isinstance(stacks, list):
