@@ -8,6 +8,14 @@ on:
         required: true
         default: 'podman-stacks-config.yml'
         type: string
+        
+  workflow_call:
+    inputs:
+      config-file:
+        description: 'Path to the configuration YAML file'
+        required: true
+        default: 'podman-stacks-config.yml'
+        type: string
 
 permissions: 
   contents: write
