@@ -29,7 +29,7 @@ jobs:
   setup:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      matrix: ${{ env.matrix }}
       issue-number: ${{ steps.create-issue.outputs.issue-number }}
 
     steps:
@@ -54,11 +54,16 @@ jobs:
         if isinstance(stacks, list):
             matrix = {'include': [{'name': stack['name'], 'path': stack.get('compose_file', '')} for stack in stacks]}
             matrix_json = json.dumps(matrix)  # Convert to properly formatted JSON
-            print('::set-output name=matrix::' + matrix_json)
+            print(matrix_json)
         else:
             print(\"::error::Invalid configuration format, 'stacks' key must be a list\")
             exit(1)
-        "
+        " > matrix.json
+
+    - name: Set matrix
+      id: set-matrix
+      run: |
+        echo "matrix=$(cat matrix.json)" >> $GITHUB_ENV
 
     - name: Create new issue
       id: create-issue
@@ -73,14 +78,9 @@ jobs:
           });
           core.setOutput('issue-number', issue.number)
 
-    - name: Set matrix
-      id: set-matrix
+    - name: Debug matrix
       run: |
-        echo '${{ steps.read-config.outputs.matrix }}' > matrix.json
-
-    - name: debug matrix
-      run: |
-        echo "Matrix: ${{ steps.set-matrix.outputs.matrix }}"
+        echo "Matrix: ${{ env.matrix }}"
 
   start-demo:
     needs: setup
@@ -188,7 +188,7 @@ jobs:
         script: |
           const fs = require('fs');
           const issueBody = fs.readFileSync('issue_body.md', 'utf8');
-          const issueNumber = '${{ needs.setup-demo-environment.outputs.issue-number }}';
+          const issueNumber = '${{ needs.setup.outputs.issue-number }}';
           await github.rest.issues.update({
             owner: context.repo.owner,
             repo: context.repo.repo,
@@ -202,7 +202,7 @@ jobs:
       timeout-minutes: 60  # Set timeout duration for 1 hour
       with:
         script: |
-          const issueNumber = '${{ needs.setup-demo-environment.outputs.issue-number }}';
+          const issueNumber = '${{ needs.setup.outputs.issue-number }}';
           const timeoutDuration = 3600000;  // 1 hour in milliseconds
           const startTime = Date.now();
 
@@ -243,7 +243,7 @@ jobs:
     - name: Close issue with comment
       if: always()
       run: |
-        ISSUE_NUMBER=${{ needs.setup-demo-environment.outputs.issue-number }}
+        ISSUE_NUMBER=${{ needs.setup.outputs.issue-number }}
         curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
           -d "{\"body\": \"Closing this issue as the session has ended.\", \"state\": \"closed\"}" \
           "https://api.github.com/repos/${{ github.repository }}/issues/${ISSUE_NUMBER}"
