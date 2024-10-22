@@ -16,6 +16,9 @@ on:
         required: true
         default: 'podman-stacks-config.yml'
         type: string
+    secrets:
+      NGROK_AUTH_TOKEN:
+        required: true
 
 permissions: 
   contents: write
