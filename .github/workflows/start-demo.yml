@@ -75,7 +75,8 @@ jobs:
 
     - name: Set matrix
       id: set-matrix
-      run: echo "::set-output name=matrix::${{ steps.read-config.outputs.matrix }}"
+      run: |
+        echo '${{ steps.read-config.outputs.matrix }}' > matrix.json
 
     - name: debug matrix
       run: |
@@ -85,7 +86,7 @@ jobs:
     needs: setup
     runs-on: ubuntu-latest
     strategy:
-      matrix: ${{ fromJson(needs.setup.outputs.matrix || '{}') }}
+      matrix: ${{ fromJson(format('{0}', needs.setup.outputs.matrix || '{"include": []}')) }}
       fail-fast: false
 
     steps:
