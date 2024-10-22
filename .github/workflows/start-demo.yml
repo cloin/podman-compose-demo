@@ -86,7 +86,7 @@ jobs:
     needs: setup
     runs-on: ubuntu-latest
     strategy:
-      matrix: ${{ fromJson(format('{0}', needs.setup.outputs.matrix || '{"include": []}')) }}
+      matrix: ${{ fromJson(needs.setup.outputs.matrix || '{"include": []}') }}
       fail-fast: false
 
     steps:
