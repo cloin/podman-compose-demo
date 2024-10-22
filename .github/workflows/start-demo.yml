@@ -159,7 +159,7 @@ jobs:
       run: |
         base64 -w 0 ~/.ssh/id_rsa > id_rsa_base64
         echo "::set-output name=ssh_key_base64::$(cat id_rsa_base64)"
-
+    
     - name: Update issue body file
       run: |
         echo "Your services are available at the following URLs:" >> issue_body.md
