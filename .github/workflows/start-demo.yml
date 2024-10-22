@@ -53,9 +53,11 @@ jobs:
         stacks = config.get('stacks', [])
         if isinstance(stacks, list):
             matrix = {'include': [{'name': stack['name'], 'path': stack.get('compose_file', '')} for stack in stacks]}
-            print('::set-output name=matrix::' + json.dumps(matrix))
+            matrix_json = json.dumps(matrix)  # Convert to properly formatted JSON
+            print('::set-output name=matrix::' + matrix_json)
         else:
             print(\"::error::Invalid configuration format, 'stacks' key must be a list\")
+            exit(1)
         "
 
     - name: Create new issue
