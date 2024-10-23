@@ -131,8 +131,9 @@ jobs:
       env:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
         PODMAN_COMPOSE_PATH: ${{ matrix.path }}
+        STACK_NAME: ${{ matrix.name }}
       run: |
-        python generate_ngrok_config.py --output ngrok_${{ matrix.name }}.yml
+        python generate_ngrok_config.py
 
     - name: Display ngrok configuration
       run: cat ngrok_${{ matrix.name }}.yml
