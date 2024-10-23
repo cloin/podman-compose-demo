@@ -134,9 +134,9 @@ jobs:
         STACK_NAME: ${{ matrix.name }}
       run: |
         python generate_ngrok_config.py
-
+    
     - name: Display ngrok configuration
-      run: cat ngrok_${{ matrix.name }}.yml
+      run: cat ngrok.yml
 
     - name: Install ngrok
       run: |
@@ -145,7 +145,7 @@ jobs:
         sudo apt-get update && sudo apt-get install ngrok
 
     - name: Start ngrok with configuration file
-      run: ngrok start --config ngrok_${{ matrix.name }}.yml --all &
+      run: ngrok start --config ngrok.yml --all &
 
     - name: Get ngrok URLs
       id: get-ngrok-urls
