@@ -39,9 +39,8 @@ ngrok_config['tunnels'][f'{stack_name}_ssh'] = {
     'inspect': False
 }
 
-# Write the ngrok configuration to a file named based on the stack name
-ngrok_file_name = f'ngrok_{stack_name}.yml'
-with open(ngrok_file_name, 'w') as file:
+# Write the ngrok configuration to 'ngrok.yml'
+with open('ngrok.yml', 'w') as file:
     yaml.dump(ngrok_config, file)
 
 # Generate a JSON file with tunnel information for reference
@@ -49,4 +48,4 @@ tunnel_info = {tunnel_name: tunnel['addr'] for tunnel_name, tunnel in ngrok_conf
 with open('tunnel_info.json', 'w') as file:
     json.dump(tunnel_info, file)
 
-print(f'Ngrok configuration written to {ngrok_file_name}')
+print('Ngrok configuration written to ngrok.yml')
