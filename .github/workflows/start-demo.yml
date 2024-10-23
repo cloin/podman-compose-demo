@@ -53,7 +53,7 @@ jobs:
         stacks = config.get('stacks', [])
         if isinstance(stacks, list):
             matrix = {'include': [{'name': stack['name'], 'path': stack.get('compose_file', '')} for stack in stacks]}
-            matrix_json = json.dumps(matrix)  # Convert to properly formatted JSON
+            matrix_json = json.dumps(matrix)
             print(matrix_json)
         else:
             print(\"::error::Invalid configuration format, 'stacks' key must be a list\")
@@ -132,10 +132,10 @@ jobs:
         NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
         PODMAN_COMPOSE_PATH: ${{ matrix.path }}
       run: |
-        python generate_ngrok_config.py
+        python generate_ngrok_config.py --output ngrok_${{ matrix.name }}.yml
 
     - name: Display ngrok configuration
-      run: cat ngrok.yml
+      run: cat ngrok_${{ matrix.name }}.yml
 
     - name: Install ngrok
       run: |
@@ -144,14 +144,14 @@ jobs:
         sudo apt-get update && sudo apt-get install ngrok
 
     - name: Start ngrok with configuration file
-      run: ngrok start --config ngrok.yml --all &
+      run: ngrok start --config ngrok_${{ matrix.name }}.yml --all &
 
     - name: Get ngrok URLs
       id: get-ngrok-urls
       run: |
         sleep 5  # Wait for ngrok to start
         NGROK_TUNNELS=$(curl --silent http://localhost:4040/api/tunnels | jq -r '.tunnels[] | "\(.name) \(.public_url)"')
-        echo "$NGROK_TUNNELS" > ngrok_tunnels.txt
+        echo "$NGROK_TUNNELS" > ngrok_tunnels_${{ matrix.name }}.txt
         echo "::set-output name=tunnels::$NGROK_TUNNELS"
 
     - name: Base64 encode SSH private key
@@ -171,7 +171,7 @@ jobs:
           else
             ssh_url="$url"
           fi
-        done < ngrok_tunnels.txt
+        done < ngrok_tunnels_${{ matrix.name }}.txt
         echo "" >> issue_body.md
         echo "SSH into the runner using the following command:" >> issue_body.md
         echo "\`\`\`" >> issue_body.md
